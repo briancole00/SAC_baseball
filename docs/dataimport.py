@@ -351,7 +351,6 @@ def genFielding(id, start_year, end_year):
     field = pd.concat(team_dfs)
     field['Pos_short'] = field['Pos'].map(dict)
     field = field.merge(id[['key_mlbam','key_fangraphs']], on='key_fangraphs', how='left').dropna(subset=['key_mlbam'])
-
     inf = field.groupby('Pos_short').get_group('IF')[[col for col in fielding_cols] + [col for col in infield_cols]]
     of = field.groupby('Pos_short').get_group('OF')[[col for col in fielding_cols] + [col for col in outfield_cols]]
     catch = field.groupby('Pos_short').get_group('C')[[col for col in fielding_cols] + [col for col in catching_cols]]
@@ -360,10 +359,16 @@ def genFielding(id, start_year, end_year):
 
 def master(start_year, end_year):
     [b_fg, b_stat, b_bwar, b_team, b_bio, b_id] = genBatting(start_year, end_year)
-    [p_fg, p_stat, p_bwar, p_team, p_bio, p_id] = genPitching(start_year, end_year)
+    [p_fg, p_stat, p_bwar, p_team, p_bio, p_id] = genPitching(start_year, end_year) #[fg, stat, bwar, team, bio, df_id]
     bio = pd.concat([b_bio, p_bio]).drop_duplicates(subset=['key_mlbam'])
     id = pd.concat([b_id, p_id]).drop_duplicates(subset=['key_mlbam'])
+    [inf, of, catch, p_field] = genFielding(id, start_year, end_year)
+    bio = bio.merge(pd.concat([inf[['key_mlbam', 'Pos', 'Pos_short']], 
+                               of[['key_mlbam', 'Pos', 'Pos_short']], 
+                               catch[['key_mlbam', 'Pos', 'Pos_short']], 
+                               p_field[['key_mlbam', 'Pos', 'Pos_short']]]).drop_duplicates(subset=['key_mlbam']), on='key_mlbam', how='left')
+    bio['Pos'].fillna('DH', inplace=True)
+    bio['Pos_short'].fillna('DH', inplace=True)
     gl = gameLogs(start_year, end_year)
     td = teamDepot(start_year, end_year)
-    return [b_fg, p_fg, b_stat, p_stat, b_bwar, p_bwar, b_team, p_team, bio, id, gl, td]
-
+    return [b_fg, p_fg, b_stat, p_stat, b_bwar, p_bwar, b_team, p_team, inf, of, catch, p_field, bio, id, gl, td]
