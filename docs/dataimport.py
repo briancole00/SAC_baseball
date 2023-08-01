@@ -38,12 +38,14 @@ pitching_cols = ['W' , 'L', 'ERA', 'CG', 'ShO', 'SV', 'BS', 'IP', 'TBF', 'H', 'R
                  'Pull%', 'Cent%', 'Oppo%', 'Soft%', 'Med%', 'Hard%', 'kwERA', 'FRM', 'Barrel%', 'HardHit%', 'CStr%',
                  'CSW%', 'xERA']
 
-# fielding_cols_gen: fielding columns to be added to all fielding tables
-fielding_cols_gen = ['Pos','PO','A','E','FE','TE','DP','DPS','DPT','DPF','FP','DRS','Def']
+# fielding_cols: columns sourced from FanGraphs that will be common across all fielding data tables
+fielding_cols = ['key_mlbam', 'Name', 'Team', 'Season', 'Pos','Pos_short', 'G', 'GS', 'Inn', 'PO', 'A', 'E', 'FE', 'TE', 'DP', 'DPS', 'DPT', 'DPF', 'FP', 'rGFP', 'DRS']
 
-# other fielding_cols: to be used for filling in position-specific columns of FanGraphs fielding stats
-fielding_cols_C = ['SB','CS','PB','WP','rSB']
-fielding_cols_IF = []
+# position-specific fielding cols
+infield_cols = ['Scp', 'rGDP', 'rPM', 'BIZ', 'RZR', 'OOZ', 'DPR', 'RngR', 'ErrR', 'UZR', 'UZR/150', 'Def', 'OAA', 'RAA']
+outfield_cols = ['ARM', 'rARM', 'rPM', 'BIZ', 'RZR', 'OOZ', 'RngR', 'ErrR', 'UZR', 'UZR/150', 'Def', 'OAA', 'RAA']
+catching_cols = ['SB', 'CS', 'PB', 'WP', 'rSB', 'Def', 'FRM', 'rCERA']
+pitchf_cols = ['SB', 'rSB']
 
 # drop_bio: columns to exclude from player biographical information
 drop_bio = ['deathYear','deathMonth','deathDay','deathCountry','deathState','deathCity','nameFirst','nameLast','nameGiven',
@@ -59,6 +61,18 @@ month = {
     'Sep':'09',
     'Oct':'10'
     }
+
+pos_dict = {
+    'C':'C',
+    '1B':'IF',
+    '2B':'IF',
+    '3B':'IF',
+    'SS':'IF',
+    'RF':'OF',
+    'CF':'OF',
+    'LF':'OF',
+    'P':'P'
+}
 
 '''
 genID(df)
@@ -311,15 +325,39 @@ def genPitching(start_year,end_year):
     return [fg, stat, bwar, team, bio, df_id]
 
 '''
-# genFielding: generates fielding data
-def genFielding(bio, year):
-    return pyb.fielding_stats(year, qual=10).rename(columns={"IDfg":"key_fangraphs"}).set_index("key_fangraphs").drop(columns={"Name"}).merge(bio["key_fangraphs"], on="key_fangraphs", how="right")
-
 # genTeamFielding: returns aggregate team fielding stats for a season
 def genTeamFielding(year):
     fieldtemp = pyb.team_fielding(year).set_index("teamIDfg").drop(columns={"Team"}).merge(pyb.team_batting(year)[["teamIDfg", "Team"]], on="teamIDfg", how="left")
     return fieldtemp[["teamIDfg", "Team", "G", "GS", "Inn", "PO", "A", "E", "FE", "TE", "DP", "Scp", "SB", "CS", "PB", "WP", "FP", "rSB", "rGDP", "rARM", "rGFP", "rPM", "DRS", "BIZ", "RZR", "OOZ", "ARM", "DPR","RngR", "ErrR","UZR","Def","FRM","OAA","RAA"]]
 '''
+'''
+genFielding(start_year, end_year)
+    INPUT
+start_year: beginning of year range to pull data
+end_year: end of year range to pull data
+    OUTPUT
+inf: infielder-specific data from Fangraphs
+'''
+def genFielding(id, start_year, end_year):
+    team_dfs = []
+    for team in fgteams:
+        temp = pyb.fielding_stats(start_year, 
+                                  end_year,
+                                  team=team,
+                                  qual=5,
+                                  split_seasons=True).rename(columns={'IDfg':'key_fangraphs'})
+        temp['Team'] = fgteams[team]
+        team_dfs.append(temp)
+    field = pd.concat(team_dfs)
+    field['Pos_short'] = field['Pos'].map(dict)
+    field = field.merge(id[['key_mlbam','key_fangraphs']], on='key_fangraphs', how='left').dropna(subset=['key_mlbam'])
+
+    inf = field.groupby('Pos_short').get_group('IF')[[col for col in fielding_cols] + [col for col in infield_cols]]
+    of = field.groupby('Pos_short').get_group('OF')[[col for col in fielding_cols] + [col for col in outfield_cols]]
+    catch = field.groupby('Pos_short').get_group('C')[[col for col in fielding_cols] + [col for col in catching_cols]]
+    pitch = field.groupby('Pos_short').get_group('P')[[col for col in fielding_cols] + [col for col in pitchf_cols]]
+    return [inf, of, catch, pitch]
+
 def master(start_year, end_year):
     [b_fg, b_stat, b_bwar, b_team, b_bio, b_id] = genBatting(start_year, end_year)
     [p_fg, p_stat, p_bwar, p_team, p_bio, p_id] = genPitching(start_year, end_year)
