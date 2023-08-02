@@ -108,9 +108,22 @@ DataFrame with gamelogs for a given timeframe
 '''
 def gameLogs(start_year, end_year):
     years = []
+    dict = {
+    'Mar':'03',
+    'Apr':'04',
+    'May':'05',
+    'Jun':'06',
+    'Jul':'07',
+    'Aug':'08',
+    'Sep':'09',
+    'Oct':'10'
+    }
     repot = pyb.lahman.teams_core().groupby('yearID')
     for year in range(start_year,end_year+1):
-        temp = pd.concat([pyb.schedule_and_record(year,team) for team in repot.get_group(year)['teamIDBR']])
+        if year > 2022:
+            temp = pd.concat([pyb.schedule_and_record(year,fgteams[team]) for team in fgteams])   
+        else:
+            temp = pd.concat([pyb.schedule_and_record(year,team) for team in repot.get_group(year)['teamIDBR']])
         temp['Season'] = year
         years.append(temp)
     gl = pd.concat(years)
@@ -121,6 +134,7 @@ def gameLogs(start_year, end_year):
     gl['Day'] = gl['Day'].apply(lambda x: '0'+x if int(x)<10 else x)
     gl['Month'] = gl['Date_split'].apply(lambda x: x.split(' ')[1])
     gl['Month'] = gl['Month'].map(dict)
+    gl.dropna(subset=['Attendance'], inplace=True)
     gl['Time'] = gl['Time'].apply(lambda x: int(x.split(':')[0])*60 + int(x.split(':')[1]))
     return gl[['Day','Month','Season','Tm','Opp','Time','D/N','Attendance']]
 
@@ -134,7 +148,22 @@ def teamDepot(start_year, end_year):
         'W':'WEST'
     }
     lmn = pyb.lahman.teams_core().groupby('yearID')
-    teams = pd.concat([lmn.get_group(year) for year in range(start_year,end_year+1)])
+    if end_year > 2022:
+        years = []
+        if start_year >= 2022:
+            for year in range(start_year, end_year+1):
+                temp = lmn.get_group(2022)
+                temp['yearID'] = year
+                years.append(temp)
+            teams = pd.concat(years)
+        else:
+            teams = pd.concat([lmn.get_group(year) for year in range(start_year,2022)])
+            for year in range(2023, end_year):
+                temp = lmn.get_group(2022)
+                temp['yearID'] = year
+                teams.concat(temp)
+    else:
+        teams = pd.concat([lmn.get_group(year) for year in range(start_year,end_year+1)])
     teams['divID'] = teams['divID'].map(div)
     return teams[['teamIDBR','name','yearID','divID','Rank','W','L','BPF','PPF']].rename(columns={'teamIDBR':'Team',
                                                                                                   'name':'TeamName',
